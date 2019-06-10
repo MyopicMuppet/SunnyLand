@@ -1,120 +1,122 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+
 using Prime31;
 
-public class Player : MonoBehaviour
-{
-    public float moveSpeed = 10f;
-    public float gravity = -10f;
-    public float jumpHeight = 7f;
-    public float centreRadius = .1f;
+public class Player : MonoBehaviour {
+
+	public float gravity = -9.81f;
+	public float moveSpeed = 10f;
+	public float jumpSpeed = 10f;
+	public float centerRadius = 0.1f;
+
+	Animator anim;
+	SpriteRenderer rend;
+	CharacterController2D controller;
+
+	bool jumped;
+	bool climbing;
+	Vector3 velocity;
+
+	void OnDrawGizmos() {
+		Gizmos.color = Color.red;
+		Gizmos.DrawWireSphere(transform.position, centerRadius);
+	}
+
+	void Start() {
+
+		anim = GetComponent<Animator>();
+		rend = GetComponent<SpriteRenderer>();
+		controller = GetComponent<CharacterController2D>();
+	}
+
+	void Update() {
+
+		// Get horizontal input
+		float inputH = Input.GetAxis("Horizontal");
+		// Get vertical input
+		float inputV = Input.GetAxis("Vertical");
+		
+		bool jumping = Input.GetButtonDown("Jump");
 
 
-    private CharacterController2D controller;
-    private SpriteRenderer rend;
-    private Animator anim;
-    private bool isClimbing = false;
+		if (controller.isGrounded) {
+			//velocity.y = 0f;
+			jumped = false;
+			if (jumping) {
+				jumped = true;
+				Jump();
+			}
+		} else if (!climbing) {		
+			velocity.y += gravity * (velocity.y < 0f && jumped ? 2f : 1f) * Time.deltaTime;
+		}
 
+		anim.SetBool("Grounded", controller.isGrounded);
+		anim.SetFloat("JumpY", Mathf.Clamp(velocity.y, -1f, 1f));
 
-    private Vector3 velocity;
+		Move(inputH);
+		Climb(inputH, inputV);
 
-    private void OnDrawGizmos()
-    {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, centreRadius);
-    }
-    // Start is called before the first frame update
-    void Start()
-    {
-        controller = GetComponent<CharacterController2D>();
-        rend = GetComponent<SpriteRenderer>();
-        anim = GetComponent<Animator>();
-    }
+		if (!climbing) {
+			// move the character left and right
+			controller.move(velocity * Time.deltaTime);
+		}
 
-    // Update is called once per frame
-    void Update()
-    {
-        //Gets inputs for movement left/right
-        float inputH = Input.GetAxis("Horizontal");
-        //Gets up and down input
-        float inputV = Input.GetAxis("Vertical");
-        //If controller is not grounded
-        if (!controller.isGrounded)
-        {
-            //Apply delta to gravity
-            velocity.y += gravity * Time.deltaTime;
-        }
-        //get jump input
-        bool isJumping = Input.GetButtonDown("Jump");
+	}
 
-        //if player presses jump
-        if (isJumping)
-        {
-            //make the player jump
-            Jump();
-            
-        }
+	void Move(float inputH) {
 
-        anim.SetBool("IsGrounded", controller.isGrounded);
-        anim.SetFloat("JumpY", velocity.y);
+		// set the horizontal component of velocity to the direction we are moving with moveSpeed
+		velocity.x = inputH * moveSpeed;
+		// set the running animation on if moving
+		anim.SetBool("IsRunning", inputH != 0);
+		// if moving
+		if (inputH != 0) {
+			// flip the spriterenderer to face the other direction
+			rend.flipX = inputH < 0;
+		}
+	}
 
-        Run(inputH);
-        Climb(inputV);
-        //applies velocity to controller (to get it to move)
-        controller.move(velocity * Time.deltaTime);
-    }
+	void Climb(float inputH, float inputV) {
+		// is overlapping ladder
+		bool overLadder = false;		
 
-    void Run(float inputH)
-    {
-        //sets character controller left and right with inputs
-        controller.move(transform.right * inputH * moveSpeed * Time.deltaTime);
-        //set bool to true if input is pressed
-        bool isRunning = inputH != 0;
-        //animate the player to running if input is pressed
-        anim.SetBool("IsRunning", isRunning);
+		// list of all hit objects overlapping point
+		Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, centerRadius);
+		// loop through each point
+		foreach (Collider2D hit in hits) {
+			// if player overlaps ladder
+			if (hit.tag == "Ladder") {
+				// player is overlapping ladder
+				overLadder = true;
+				break;
+			}
+		}
 
+		// if vertical input is not 0 and player is over ladder
+		if (inputV != 0f && overLadder) {
+			// set climbing to true
+			climbing = true;
+		}
+		if (!overLadder) {
+			climbing = false;
+		}
+		// if climbing
+		if (climbing) {
+			// climbing logic
+			// translate character
+			Vector3 inputDir = new Vector3(inputH, inputV);
+			transform.Translate(inputDir * moveSpeed * Time.deltaTime);
 
+		}
+		anim.SetBool("IsClimbing", climbing);
+		anim.SetFloat("ClimbSpeed", inputV);
 
-        //check if input is pressed
-        if (isRunning)
-        {
-            //Flip character depending on left/right input
-            rend.flipX = inputH < 0;
-        }
-        //rend.flipX = inputH > 0
-    }
+	}
 
-    void Climb(float inputV)
-    {
-        //is overlapping ladder
-        bool isOverLadder = false;
-        // is in climbing state
-        //check if point overlaps a climbable object
-        Collider2D[] hits = Physics2D.OverlapPointAll(transform.position);
-        //if  is over climbable and input V has been made
-        foreach (var hit in hits)
-        {
-            //if point overlaps a climbable object
-            if(hit.tag == "Ladder")
-            {
-                isOverLadder = true;
-                break;
-            }
-        }
-
-        if(isOverLadder && inputV != 0)
-        {
-            isClimbing = true;
-        }
-        //is climbing
-        //if is climbing
-        //perform logic for climbing    
-    }
-
-    void Jump()
-    {
-        //set velocity Y to height
-        velocity.y = jumpHeight;
-    }
+	void Jump() {
+		// Set the vertical component of the velocity to the jump speed
+		velocity.y = jumpSpeed;
+	}
 }
